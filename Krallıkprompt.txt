@@ -1,0 +1,1353 @@
+# 🏰 KRALLIK MODU V7.0 - TAM SİSTEM DOKÜMANI (KODSUZ)
+
+---
+
+## 📋 BÖLÜM 1: PROJE GENEL BİLGİLERİ
+
+| Madde | Değer |
+|-------|-------|
+| Mod Adı | Krallık Modu V7.0 (Simple Shop 1.1) |
+| Entegre Mod | Napoleonic Wars V.0.0.8 |
+| Sürüm | 1.1.0 |
+| Min Engine | 1.21.0 |
+| Entry Point | `scripts/main.js` |
+| Dil | JavaScript (ES Modules) |
+| Platform | Minecraft Bedrock (MCPE) |
+| Max Oyuncu | 50 |
+| Minecraft Sürümü | 1.21.132 |
+
+---
+
+## 📋 BÖLÜM 2: MANIFEST DOSYASI
+
+```json
+{
+  "format_version": 2,
+  "header": {
+    "description": "ZMC Market Sistemi - Gelişmiş Arama ve Ordu Birimleri",
+    "name": "Simple Shop 1.1",
+    "uuid": "ec83632e-30b3-4aa8-a518-8fb954c1bee7",
+    "version": [1, 1, 0],
+    "min_engine_version": [1, 21, 0]
+  },
+  "modules": [
+    {
+      "description": "Data Module",
+      "type": "data",
+      "uuid": "e1caa708-f956-4abf-a481-63d6dfb815f8",
+      "version": [1, 1, 0]
+    },
+    {
+      "type": "script",
+      "uuid": "5611618f-1b1f-4eb3-8b4a-40cd5bcd0f9d",
+      "version": [1, 1, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.13.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "1.2.0"
+    }
+  ]
+}
+```
+
+---
+
+## 📋 BÖLÜM 3: ITEM DOSYALARI
+
+### 3.1. Krallık Menüsü Item'i (`knights:krallik_trigger`)
+```json
+{
+  "format_version": "1.20.80",
+  "minecraft:item": {
+    "description": {
+      "identifier": "knights:krallik_trigger",
+      "menu_category": { "category": "equipment" }
+    },
+    "components": {
+      "minecraft:max_stack_size": 1,
+      "minecraft:icon": "knights:woollen_cloth",
+      "minecraft:display_name": { "value": "§6👑 Krallık Yönetimi" },
+      "minecraft:custom_components": ["krallik:trigger"]
+    }
+  }
+}
+```
+
+### 3.2. Market Item'i (`zc:invshop`)
+```json
+{
+  "format_version": "1.21.10",
+  "minecraft:item": {
+    "description": {
+      "identifier": "zc:invshop",
+      "menu_category": { "category": "items" }
+    },
+    "components": {
+      "minecraft:hand_equipped": false,
+      "minecraft:max_stack_size": 1,
+      "minecraft:glint": false,
+      "minecraft:use_modifiers": {
+        "movement_modifier": 1,
+        "use_duration": 0
+      },
+      "minecraft:allow_off_hand": false,
+      "minecraft:icon": "zc:invshop",
+      "minecraft:display_name": { "value": "Inventory Shop" },
+      "minecraft:tags": { "tags": [] },
+      "minecraft:custom_components": ["zc_invshop:trigger"]
+    }
+  }
+}
+```
+
+---
+
+## 📋 BÖLÜM 4: CORE SİSTEMLER (Temel Altyapı)
+
+### 4.1. VERİTABANI (DATABASE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 1 | Veri Saklama | `world.setDynamicProperty()` ile JSON formatında saklanır |
+| 2 | Parçalı Saklama | 32KB limiti için parçalara bölünür |
+| 3 | Core Bölümü | `krallik_core` - Krallıklar, oyuncular, profiller, liderlik |
+| 4 | Claims Bölümü | `krallik_claims` - Tüm claim verileri |
+| 5 | Army Bölümü | `krallik_army` - Asker kayıtları |
+| 6 | Economy Bölümü | `krallik_economy` - Gelir, gider, hazine |
+| 7 | Market Bölümü | `krallik_market` - Market ürünleri ve fiyatlar |
+| 8 | Profiles Bölümü | `krallik_profiles` - Oyuncu profilleri |
+| 9 | Logs Bölümü | `krallik_logs` - Log kayıtları |
+| 10 | Admin Bölümü | `krallik_admin` - Admin ayarları, yedekler |
+| 11 | Settings Bölümü | `krallik_settings` - Genel ayarlar |
+| 12 | Duvarlar Bölümü | `krallik_duvarlar` - Duvar verileri |
+| 13 | Extras Bölümü | `krallik_extras` - Ek veriler |
+| 14 | Veri Yükleme | `load()` tüm bölümleri yükler, tek objede birleştirir |
+| 15 | Veri Kaydetme | `markDirty()` ile işaretlenir, `save()` 3 saniye debounce ile kaydeder |
+| 16 | Krallık CRUD | getKrallik, saveKrallik, deleteKrallik |
+| 17 | Oyuncu Krallığı | getKrallikByPlayer, getKrallikIdByPlayer |
+| 18 | Claim CRUD | getClaim, saveClaim, deleteClaim, getClaimsByKrallik |
+| 19 | Asker CRUD | getAsker, saveAsker, deleteAsker, getAskerByKrallik |
+| 20 | Log Ekleme | addLog(level, category, message, metadata) |
+| 21 | Log Getirme | getLogs(category, limit) |
+| 22 | Yedek Alma | createBackup(label) |
+| 23 | Yedek Listeleme | listBackups() |
+| 24 | Yedek Geri Yükleme | restoreBackup(id) |
+| 25 | Veritabanı Temizleme | cleanup() |
+| 26 | Hazine Senkronizasyonu | Krallık hazinesi liderin ZMC'sine bağlanır |
+| 27 | Hazine Canlı Görünüm | Hazine ayrı sayaç değil, liderin scoreboard skorunun canlı görünümü |
+
+### 4.2. ÖNBELLEK (CACHE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 28 | Entity Cache | Tüm entity'ler periyodik taranır, _entityCache'de saklanır |
+| 29 | Entity Yenileme | getEntities(true) ile zorla yenileme |
+| 30 | Entity ID ile Getirme | getEntityById(id) |
+| 31 | Krallık Entity Gruplama | Entity'ler krallik_ tag'ine göre gruplanır |
+| 32 | Krallık Entity Getirme | getEntitiesByKrallik(kid) |
+| 33 | Krallık Entity Sayısı | getKrallikEntityCount(kid) |
+| 34 | Entity Krallık ID | getEntityKrallikId(entity) |
+| 35 | Yakın Entity'ler | getNearbyEntities(loc, range) |
+| 36 | Entity Geçerlilik | isValidEntity(entity) |
+| 37 | Claim Cache | getClaims() tüm claim'leri döner |
+| 38 | Claim Chunk İndeksleme | _claimByChunk ile chunk bazında indekslenir |
+| 39 | Claim Bulma | getClaimAt(loc, dimensionId) |
+| 40 | Yakın Claim'ler | getNearbyClaims(loc, range, dimensionId) |
+| 41 | Claim Cache Temizleme | invalidateClaimCache() |
+| 42 | Nokta-Çokgen Kontrolü | Claim içinde mi kontrolü (ray casting algoritması) |
+| 43 | Profil Cache | getProfile(playerName) |
+| 44 | Profil Cache Temizleme | invalidateProfileCache(playerName) |
+| 45 | Liderlik Cache | getLeaderboard() |
+| 46 | Liderlik Cache Temizleme | invalidateLeaderboardCache() |
+| 47 | Güç Cache | getPower(kid) |
+| 48 | Güç Cache Temizleme | invalidatePowerCache(kid) |
+| 49 | Market Fiyat Cache | getMarketPrices() |
+| 50 | Market Cache Temizleme | invalidateMarketCache() |
+| 51 | Envanter Cache | getInventory(playerName) |
+| 52 | Envanter Cache Temizleme | invalidateInventoryCache(playerName) |
+| 53 | Cache Temizlik | cleanup() eski cache'leri temizler |
+
+### 4.3. ZAMANLAYICI (SCHEDULER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 54 | Başlatma | init() ile scheduler başlatılır |
+| 55 | Ana Döngü | Her tick'te çalışır, oyuncu sayısı güncellenir |
+| 56 | Sabit Görev | register(name, callback, interval) |
+| 57 | Adaptif Görev | registerAdaptive(name, callback, rateKey) - oyuncu sayısına göre |
+| 58 | Throttled Görev | registerThrottled(name, callback, minInterval) |
+| 59 | Gecikmeli Görev | runLater(callback, delayTicks) |
+| 60 | Görev İptal | unregister(name) |
+| 61 | Tüm Görevleri Durdur | stopAll() |
+| 62 | Görev Listesi | getTasks() |
+| 63 | Performans İstatistikleri | getPerformanceStats() |
+| 64 | Oyuncu Sayısı | getPlayerCount() |
+| 65 | Tick Sayısı | getTickCount() |
+| 66 | Adaptif Hız Ayarlama | _updateAdaptiveRates() |
+| 67 | AI Tick | 40 tick aralıkla AI çalışır |
+| 68 | Ekonomi Tick | 1200 tick aralıkla ekonomi güncellenir |
+| 69 | Kuşatma Tick | 30 tick aralıkla kuşatma kontrolü |
+| 70 | Morale Tick | 600 tick aralıkla morale güncellenir |
+| 71 | Güç Tick | 2400 tick aralıkla güç hesaplanır |
+| 72 | Bakım Tick | 3600 tick aralıkla bakım çalışır |
+| 73 | Kayıt Tick | 200 tick aralıkla veritabanı kaydedilir |
+| 74 | Olay Tick | 800 tick aralıkla olaylar kontrol edilir |
+| 75 | Devriye Tick | 40 tick aralıkla devriyeler çalışır |
+| 76 | Liderlik Tick | 400 tick aralıkla liderlik güncellenir |
+| 77 | Haber Tick | 60 tick aralıkla haberler kontrol edilir |
+
+### 4.4. LOGLAMA (LOGGER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 78 | Log Seviyeleri | INFO, WARN, WARNING, ERROR, CRITICAL |
+| 79 | Log Ekleme | log(level, category, message, metadata) |
+| 80 | Debug Log | debug(category, message, metadata) |
+| 81 | Info Log | info(category, message, metadata) |
+| 82 | Warning Log | warning(category, message, metadata) |
+| 83 | Error Log | error(category, message, metadata) |
+| 84 | Critical Log | critical(category, message, metadata) |
+| 85 | Krallık Log | kingdom(kid, message, metadata) |
+| 86 | Oyuncu Log | player(playerName, message, metadata) |
+| 87 | Claim Log | claim(claimId, message, metadata) |
+| 88 | Asker Log | army(kid, message, metadata) |
+| 89 | Ekonomi Log | economy(kid, message, metadata) |
+| 90 | Diplomasi Log | diplomacy(kid, message, metadata) |
+| 91 | Savaş Log | war(kid, message, metadata) |
+| 92 | Admin Log | admin(actor, message, metadata) |
+| 93 | Sistem Log | system(message, metadata) |
+| 94 | Log Getirme | getLogs(category, limit) |
+| 95 | Log Temizleme | clearLogs(category) |
+| 96 | Minimum Seviye | setMinLevel(level) |
+| 97 | Log İstatistikleri | getStats() |
+| 98 | Hata Raporu | getErrorReport(limit) |
+| 99 | Kritik Rapor | getCriticalReport(limit) |
+| 100 | Max Log | 500 log tutulur |
+| 101 | Log Temizlik Yaşı | 604800000 ms (7 gün) |
+
+### 4.5. OLAY YÖNETİMİ (EVENTBUS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 102 | Olay Dinleme | on(eventName, handler) |
+| 103 | Tek Seferlik Dinleme | once(eventName, handler) |
+| 104 | Dinleyici Kaldırma | off(eventName, handler) |
+| 105 | Olay Tetikleme | emit(eventName, payload) |
+| 106 | Asenkron Olay | emitAsync(eventName, payload) |
+| 107 | Dinleyici Sayısı | listenerCount(eventName) |
+| 108 | Tüm Dinleyiciler | getListeners(eventName) |
+| 109 | Tüm Olaylar | getAllEvents() |
+| 110 | Olay Geçmişi | getHistory(limit) |
+| 111 | Tüm Dinleyicileri Temizle | clearAll() |
+| 112 | Olay Bekleme | waitFor(eventName, timeout) - Promise |
+| 113 | Krallık Kuruldu | kingdomCreated(kid, data) |
+| 114 | Krallık Dağıldı | kingdomDestroyed(kid, reason) |
+| 115 | Krallık Seviye Atladı | kingdomLevelUp(kid, newLevel) |
+| 116 | Oyuncu Katıldı | playerJoined(playerName, kid) |
+| 117 | Oyuncu Ayrıldı | playerLeft(playerName, kid) |
+| 118 | Claim Oluşturuldu | claimCreated(claimId, kid) |
+| 119 | Claim Ele Geçirildi | claimCaptured(claimId, fromKid, toKid) |
+| 120 | Savaş Başladı | warStarted(kidA, kidB) |
+| 121 | Savaş Bitti | warEnded(kidA, kidB, winner) |
+| 122 | İttifak Kuruldu | allianceFormed(kidA, kidB) |
+| 123 | İttifak Bozuldu | allianceBroken(kidA, kidB) |
+| 124 | Asker Öldü | soldierDied(soldierId, kid) |
+| 125 | Asker Spawnlandı | soldierSpawned(soldierId, kid) |
+| 126 | Ekonomi Güncellendi | economyUpdated(kid, data) |
+| 127 | VIP Satın Alındı | vipPurchased(playerName, packageName) |
+
+### 4.6. SPAM KORUMASI (RATELIMITER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 128 | İzin Kontrolü | isAllowed(player, action, limit, windowMs) |
+| 129 | Kalan Hak | getRemaining(player, action, limit, windowMs) |
+| 130 | Bekleme Süresi | getWaitTime(player, action, windowMs) |
+| 131 | Temizlik | cleanup() |
+| 132 | Otomatik Temizlik | autoCleanup() |
+| 133 | Sıfırlama | reset(player, action) |
+| 134 | Tümünü Sıfırla | resetAll() |
+| 135 | Durum Bilgisi | getStatus(player) |
+| 136 | Global Durum | getGlobalStatus() |
+| 137 | Varsayılan Limit | setDefaultLimit(limit) |
+| 138 | Varsayılan Pencere | setDefaultWindow(windowMs) |
+| 139 | Krallık Kurma Limiti | 1 istek / 30 saniye |
+| 140 | Claim Alma Limiti | 3 istek / 10 saniye |
+| 141 | Asker Alma Limiti | 5 istek / 5 saniye |
+| 142 | Market Alma Limiti | 10 istek / 2 saniye |
+| 143 | Seviye Atlama Limiti | 1 istek / 5 saniye |
+| 144 | Gelişim Atlama Limiti | 3 istek / 3 saniye |
+| 145 | Customize Auth Limiti | 3 istek / 30 saniye |
+| 146 | Hata Mesajı | checkWithMessage(player, action, limit, windowMs) |
+
+---
+
+## 📋 BÖLÜM 5: KRALLIK SİSTEMİ
+
+### 5.1. KRALLIK YÖNETİMİ (KINGDOM)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 147 | Krallık Kurma | 40.000 ZMC ile krallık kurulur |
+| 148 | İsim Seçimi | Krallık adı en az 2 karakter, benzersiz olmalı |
+| 149 | Ülke Seçimi | british, french, german, russian, italian, spanish |
+| 150 | Krallık Katılma | Mevcut krallığa katılma |
+| 151 | Max Üye | 20 üye (seviye ile artar) |
+| 152 | Krallıktan Ayrılma | Üye ayrılabilir (lider hariç) |
+| 153 | Krallık Bilgisi | isim, lider, üye, seviye, hazine, durum |
+| 154 | Krallık Listesi | Tüm krallıklar listelenir |
+| 155 | Krallık Yayını | broadcast(kid, message) |
+| 156 | Krallık Seviyesi | 1-10 seviye |
+| 157 | Seviye 2 Ücreti | 10.000 ZMC |
+| 158 | Seviye 3 Ücreti | 25.000 ZMC |
+| 159 | Seviye 4 Ücreti | 50.000 ZMC |
+| 160 | Seviye 5 Ücreti | 100.000 ZMC |
+| 161 | Asker Limiti Artışı | Seviye 1: 70, Seviye 10: 300 |
+| 162 | Claim Alan Bonusu | Seviye 1: %0, Seviye 10: %100 |
+| 163 | Gelir Bonusu | Seviye 1: %0, Seviye 10: %50 |
+| 164 | Max Üye Artışı | Seviye 1: 20, Seviye 10: 40 |
+| 165 | Krallık Dağılma | Lider krallığı dağıtabilir |
+| 166 | Krallık Birleşmesi | İki krallık birleşebilir |
+| 167 | Birleşme Şartları | Her iki lider kabul, 7 gün ittifak, 10.000 ZMC |
+| 168 | Eşit Birleşme | Yeni isim belirlenir |
+| 169 | Asimile Birleşme | Büyük krallık küçüğü yutar |
+| 170 | Birleşme Avantajları | +20 itibar, tüm claim'ler, tüm askerler |
+| 171 | Birleşme Dezavantajları | -10 itibar, liderlik paylaşımı |
+| 172 | Krallık Ortaklığı | Ekonomik, askeri, toprak ortaklığı |
+| 173 | Ortaklık Ücreti | 5.000 ZMC |
+| 174 | Ortaklık Avantajları | +10 itibar, gelir paylaşımı |
+| 175 | Ortaklık Dezavantajları | -5 itibar, %20 gelir bölüşümü |
+
+### 5.2. ROLLER VE PERMİSYONLAR (ROLES)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 176 | Admin Rolü | Tüm yetkiler, max 5 kişi, renk: §4 |
+| 177 | Kral Rolü | Tüm yetkiler (*), max 1 kişi, renk: §6 |
+| 178 | Yardımcı Rolü | claim.*, military.*, economy.*, diplomacy.*, member.*, market.*, duvar.*, max 5, renk: §e |
+| 179 | Komutan Rolü | military.*, siege.*, combat.*, member.invite, duvar.*, max 3, renk: §c |
+| 180 | Diplomat Rolü | diplomacy.*, member.invite, max 2, renk: §b |
+| 181 | Ekonomist Rolü | economy.*, market.*, max 2, renk: §a |
+| 182 | Claimci Rolü | claim.*, max 3, renk: §3 |
+| 183 | Üye Rolü | Yetki yok, max 999, renk: §7 |
+| 184 | Yetki Kontrolü | hasPermission(playerName, permission) |
+| 185 | Wildcard Yetki | * tüm yetkiler, claim.* claim modülü |
+| 186 | Rol Atama | assignRole(player, targetName, roleId) |
+| 187 | Rol Max Count | Her rolün max sayısı vardır |
+| 188 | Rol Listesi | listRoles(kid) |
+
+### 5.3. OYUNCU PROFİLİ (PLAYER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 189 | Profil Oluşturma | createProfile(playerName) |
+| 190 | Profil Getirme | getProfile(playerName) |
+| 191 | İstatistik Güncelleme | updateStat(playerName, stat, value) |
+| 192 | Kill İstatistiği | Toplam kill sayısı |
+| 193 | Death İstatistiği | Toplam ölüm sayısı |
+| 194 | Asker Öldürme | Öldürülen asker sayısı |
+| 195 | Claim Sayısı | Sahip olunan claim sayısı |
+| 196 | Savaş Sayısı | Katıldığı savaş sayısı |
+| 197 | Kazanç | Toplam kazanılan ZMC |
+| 198 | Market Harcama | Market harcaması |
+| 199 | İtibar | 0-100 arası itibar puanı |
+| 200 | Online Süre | Toplam online süresi |
+| 201 | Güç | Güç puanı |
+| 202 | K/D Oranı | getKD(playerName) |
+| 203 | İtibar Ekleme | addReputation(playerName, amount) |
+| 204 | Online Süre Ekleme | addOnlineTime(playerName, seconds) |
+| 205 | Oyuncu Bilgisi | getPlayerInfo(playerName) |
+| 206 | Oyuncu Sıralaması | getTopPlayers(stat, limit) |
+| 207 | Profil Formatlama | formatProfile(playerName) |
+
+### 5.4. KRALLIK SOHBETİ (CHAT)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 208 | Krallık Sohbeti | /k <mesaj> ile krallık içi mesaj |
+| 209 | Üye Listesi | /klist ile üye listesi |
+| 210 | Krallık Bilgisi | /kinfo ile krallık bilgisi |
+| 211 | Mesaj Formatı | [Krallık] Oyuncu: Mesaj |
+| 212 | Rol Göstergesi | Mesajda rol emojisi |
+| 213 | Online Durumu | Üye listesinde online/offline |
+| 214 | Lider Göstergesi | Lider 👑 ile işaretlenir |
+
+### 5.5. KRALLIK TARİHİ (HISTORY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 215 | Olay Ekleme | addEvent(kid, type, message, metadata) |
+| 216 | Olay Tipleri | kurulus, savas, ittifak, claim, lider, ekonomi, asker, diplomasi, sistem |
+| 217 | Olay Listeleme | getEvents(kid, limit, type) |
+| 218 | Olay Filtreleme | getEventsByType(kid, type, limit) |
+| 219 | Krallık Özeti | getSummary(kid) |
+| 220 | Olay Formatlama | formatEvent(event) |
+| 221 | Tarih Gösterme | showHistory(player, kid, limit) |
+
+### 5.6. KRALLIK RÜTBE (RANKS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 222 | Bey Rütbesi | Min 1 üye, 0 claim, %5 gelir bonusu |
+| 223 | Kont Rütbesi | Min 5 üye, 1 claim, %10 gelir, +5 asker |
+| 224 | Dük Rütbesi | Min 10 üye, 3 claim, %15 gelir, +10 asker |
+| 225 | Prens Rütbesi | Min 15 üye, 5 claim, %20 gelir, +15 asker |
+| 226 | Kral Rütbesi | Min 20 üye, 10 claim, %30 gelir, +25 asker |
+| 227 | Rütbe Alma | getRank(kid) |
+| 228 | Rütbe Güncelleme | updateRank(kid) |
+| 229 | Rütbe Bonusları | getBonuses(kid) |
+| 230 | Sonraki Rütbe | getNextRank(kid) |
+| 231 | İlerleme Durumu | getProgress(kid) |
+| 232 | Rütbe Gösterme | showRank(player) |
+
+### 5.7. PARA TRANSFERİ (TRANSFER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 233 | Minimum Transfer | 100 ZMC |
+| 234 | Maksimum Transfer | 10.000 ZMC / gün |
+| 235 | Transfer Vergisi | %5 |
+| 236 | Transfer İşlemi | transfer(player, targetName, amount) |
+| 237 | Günlük Limit | getDailyRemaining(player) |
+| 238 | Transfer Geçmişi | getHistory(player, limit) |
+| 239 | Aynı Krallık Şartı | Sadece aynı krallık içi transfer |
+| 240 | Bildirim | Krallık üyelerine bildirim |
+
+### 5.8. KRALLIK MİRASI (V2)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 241 | Varis Belirleme | Lider varis belirleyebilir |
+| 242 | Otomatik Varis | Lider giderse varis lider olur |
+| 243 | Varis Yoksa | En yüksek rütbeli üye lider olur |
+
+### 5.9. KRALLIK DEVRİ (V2)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 244 | Lider Devri | Lider krallığı devredebilir |
+| 245 | Devir Şartları | Hedef üye krallıkta olmalı |
+| 246 | Devir Bildirimi | Tüm üyelere bildirim |
+
+### 5.10. KRALLIK İSYANI (V2)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 247 | İsyana Başlama | Üyeler lidere karşı isyan |
+| 248 | İsyana Katılım | Oyuncular isyana katılabilir |
+| 249 | İsyana Karşı | Lider isyanı bastırabilir |
+| 250 | İsyan Başarısı | Lider değişir |
+| 251 | İsyan Başarısızlığı | İsyan edenler sürgün edilir |
+
+### 5.11. KRALLIK SÜRGÜNÜ (V2)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 252 | Sürgün Etme | Lider üye sürgün edebilir |
+| 253 | Sürgün Nedeni | Sebep belirtilmeli |
+| 254 | Sürgün Bildirimi | Tüm üyelere bildirim |
+
+### 5.12. KRALLIK AFı (V2)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 255 | Af Etme | Sürgün edilen affedilebilir |
+| 256 | Af Şartları | Lider affedebilir |
+| 257 | Af Bildirimi | Tüm üyelere bildirim |
+
+---
+
+## 📋 BÖLÜM 6: CLAIM SİSTEMİ
+
+### 6.1. CLAIM YÖNETİMİ (CLAIM)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 258 | Claim Oluşturma | Vertex tabanlı, min 3 köşe, max 20 köşe |
+| 259 | Claim Alanı | _calculateArea(vertices) |
+| 260 | Claim Fiyatı | 18 ZMC/blok |
+| 261 | Claim Türü Seçimi | merkez, tarim, maden, askeri, sinir |
+| 262 | Claim Silme | delete(player, claimId) |
+| 263 | Claim Bilgisi | getInfo(claimId) |
+| 264 | Claim Yükseltme | upgrade(player, claimId) |
+| 265 | Claim Seviye Ücreti | 5.000 - 50.000 ZMC |
+| 266 | Claim Max Seviye | 10 |
+| 267 | Claim Sağlığı | 100 max |
+| 268 | Claim Hasarı | Savaşta hasar alır |
+| 269 | Claim Onarımı | ZMC ile onarılır |
+| 270 | Claim Koruma | Claim sahibi olmayanlar kıramaz |
+| 271 | Claim İttifak Erişimi | İttifak üyeleri erişebilir |
+| 272 | Claim Savaş Erişimi | Savaşta düşman girebilir |
+| 273 | Claim Bağlantısı | Tüm claim'ler merkeze bağlı |
+| 274 | Claim Parça Sayısı | Max 50 parça |
+| 275 | Claim Minimum Alan | 100 blok |
+| 276 | Claim Merkez Kati | Merkez 2 kat büyük |
+| 277 | Claim Nötr Bölge | Kimsenin claim'i olmayan bölge |
+| 278 | Claim Tampon Bölge | İki krallık arası güvenli bölge |
+| 279 | Claim İşgal Süresi | 3 gün |
+| 280 | Claim Savunma Bonusu | %25 |
+| 281 | Claim Gece Savunması | %20 |
+| 282 | Claim Geri Alma | 3 gün içinde geri alınabilir |
+
+### 6.2. CLAIM TÜRLERİ (TYPES)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 283 | Merkez | Gelir: 80 ZMC/saat, Bonus: %50, Emoji: 👑 |
+| 284 | Tarım | Gelir: 50 ZMC/saat, Bonus: %30, Emoji: 🌾 |
+| 285 | Maden | Gelir: 60 ZMC/saat, Bonus: %40, Emoji: ⛏️ |
+| 286 | Askeri | Gelir: 30 ZMC/saat, Bonus: %20, Emoji: ⚔️ |
+| 287 | Sınır | Gelir: 20 ZMC/saat, Bonus: %15, Emoji: 🛡️ |
+| 288 | Hayvancılık | Gelir: 40 ZMC/saat, Bonus: %25, Emoji: 🐄 |
+| 289 | Orman | Gelir: 35 ZMC/saat, Bonus: %20, Emoji: 🌲 |
+| 290 | İnşaat | Gelir: 25 ZMC/saat, Bonus: %15, Emoji: 🏗️ |
+| 291 | Gözetleme | Gelir: 15 ZMC/saat, Bonus: %30, Emoji: 🔭 |
+| 292 | Tür Getirme | getType(typeId) |
+| 293 | Tür Kontrolü | isValidType(typeId) |
+| 294 | Tür Geliri | getIncome(typeId) |
+| 295 | Tür Bonusu | getBonus(typeId) |
+| 296 | Tür Rengi | getColor(typeId) |
+| 297 | Tür Emojisi | getEmoji(typeId) |
+
+### 6.3. BAYRAKLAR (FLAGS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 298 | Bayrak Spawn | spawnFlags(claimId) |
+| 299 | Bayrak Temizle | removeAllFlags(claimId) |
+| 300 | Bayrak Yenile | refreshFlags(claimId) |
+| 301 | İngiliz Bayrağı | knights:napoleonic_flag_of_england |
+| 302 | Fransız Bayrağı | knights:napoleonic_flag_of_france |
+| 303 | Alman Bayrağı | knights:napoleonic_flag_of_germany |
+| 304 | Rus Bayrağı | knights:napoleonic_flag_of_russia |
+| 305 | İtalyan Bayrağı | knights:napoleonic_flag_of_italy |
+| 306 | İspanyol Bayrağı | knights:napoleonic_flag_of_spain |
+| 307 | Bayrak Kontrolü | isFlag(entity) |
+| 308 | Bayrak Claim ID | getClaimIdFromFlag(entity) |
+| 309 | Bayrak Koruma | isFlagProtected(entity, player) |
+| 310 | Bayrak Bildirimi | Dikildiğinde/yok edildiğinde bildirim |
+
+### 6.4. KORUMA (PROTECTION)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 311 | Claim Koruması | isProtected(location, dimensionId, player) |
+| 312 | Blok Kırma | canBreakBlock(player, location) |
+| 313 | Blok Yerleştirme | canPlaceBlock(player, location) |
+| 314 | Claim Bulma | getClaimAt(location, dimensionId) |
+| 315 | İhlal Bildirimi | notifyViolation(player, claim) |
+| 316 | İttifak Kontrolü | İttifak üyeleri korumaya takılmaz |
+| 317 | Savaş Kontrolü | Savaşta koruma devre dışı |
+
+### 6.5. KUŞATMA (SIEGE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 318 | Kuşatma Başlatma | start(attackerKid, claimId) |
+| 319 | Kuşatma Süresi | 120 saniye |
+| 320 | Kuşatma Menzili | 50 blok |
+| 321 | Savunma Bonusu | %50 |
+| 322 | Kuşatma Tick | tick() |
+| 323 | Kuşatma Bitişi | Süre dolunca biter |
+| 324 | Kuşatma Kazananı | En çok asker toplayan kazanır |
+| 325 | Kuşatma Kaybedeni | Claim kaybeder |
+
+### 6.6. CLAIM GERİ ALMA (RECOVERY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 326 | Geri Alma Süresi | 3 gün |
+| 327 | Geri Alma Ücreti | Claim değerinin %50'si |
+| 328 | Geri Alma Şartı | Claim savaşta olmamalı |
+| 329 | Geri Alma Süresi | getRecoveryTime(claimId) |
+
+### 6.7. CLAIM HARİTASI (MAP)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 330 | Harita Oluşturma | generateMap(player, centerX, centerZ, radius) |
+| 331 | Harita Gösterme | showMap(player, centerX, centerZ, radius) |
+| 332 | Komşu Claim'ler | getNeighbors(claimId, distance) |
+| 333 | Claim Köşeleri | getClaimCorners(claimId) |
+| 334 | Claim Merkezi | getClaimCenter(claimId) |
+
+### 6.8. BİNA SİSTEMİ (BUILDINGS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 335 | Kışla | Asker üretim hızı +%20 |
+| 336 | Pazar Yeri | Ticaret geliri +%15 |
+| 337 | Kale | Kuşatma savunması +%25 |
+| 338 | Maden Ocağı | Gelir +%10 |
+| 339 | Tapınak | Morale +%10 |
+| 340 | Gözetleme Kulesi | Görüş alanı +%30 |
+| 341 | Bina İnşa | build(player, claimId, buildingType) |
+| 342 | Bina Yükselt | upgrade(player, claimId, buildingId) |
+| 343 | Bina Bonusları | getBonuses(claimId) |
+| 344 | Bina Listesi | listBuildings(claimId) |
+| 345 | Bina Bilgisi | getBuildingInfo(buildingId) |
+
+### 6.9. CLAIM HUD (HUD)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 346 | Tabela Oluşturma | createSign(claimId, edgeKey, position) |
+| 347 | Tabela Kaldırma | removeSign(claimId, edgeKey) |
+| 348 | Tüm Tabelaları Kaldır | removeAllSigns(claimId) |
+| 349 | Tabela Güncelleme | updateSign(claimId, edgeKey) |
+| 350 | Yakınlık Kontrolü | checkProximity(player) |
+| 351 | Tabela İçeriği | Claim adı, seviye, güç |
+
+---
+
+## 📋 BÖLÜM 7: ORDU SİSTEMİ
+
+### 7.1. ASKER SATIN ALMA (ARMY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 352 | Piyade Fiyatı | 5.000 ZMC |
+| 353 | Süvari Fiyatı | 7.000 ZMC |
+| 354 | Topçu Fiyatı | 3.000 ZMC |
+| 355 | Piyade Hasar | 10 |
+| 356 | Süvari Hasar | 15 |
+| 357 | Topçu Hasar | 20 |
+| 358 | Piyade Can | 100 |
+| 359 | Süvari Can | 120 |
+| 360 | Topçu Can | 80 |
+| 361 | Piyade Hız | 1.0 |
+| 362 | Süvari Hız | 1.8 |
+| 363 | Topçu Hız | 0.7 |
+| 364 | Asker Satın Alma | buySoldier(player, typeId) |
+| 365 | Asker Bilgisi | getSoldierInfo(entityId) |
+| 366 | Asker Listesi | getSoldiers(kid) |
+| 367 | Asker Öldürme | killSoldier(entityId, killerKid) |
+| 368 | Asker Limiti | Seviyeye göre (70-300) |
+| 369 | İngiliz Piyade | knights:british_soldier |
+| 370 | İngiliz Süvari | knights:british_cuirassier |
+| 371 | İngiliz Topçu | knights:british_gunner |
+| 372 | Fransız Piyade | knights:french_soldier |
+| 373 | Fransız Süvari | knights:french_cuirassier |
+| 374 | Fransız Topçu | knights:french_gunner |
+| 375 | Alman Piyade | knights:german_soldier |
+| 376 | Alman Süvari | knights:german_cuirassier |
+| 377 | Alman Topçu | knights:german_gunner |
+| 378 | Rus Piyade | knights:russian_soldier |
+| 379 | Rus Süvari | knights:russian_cuirassier |
+| 380 | Rus Topçu | knights:russian_gunner |
+| 381 | İtalyan Piyade | knights:italian_soldier |
+| 382 | İtalyan Süvari | knights:italian_cuirassier |
+| 383 | İtalyan Topçu | knights:italian_gunner |
+| 384 | İspanyol Piyade | knights:spanish_soldier |
+| 385 | İspanyol Süvari | knights:spanish_cuirassier |
+| 386 | İspanyol Topçu | knights:spanish_gunner |
+| 387 | Recruit Event | knights:recruited_event |
+| 388 | Hedef Tag | knights_emir_hedefi |
+
+### 7.2. ASKER AI (AI)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 389 | Asker Durumu | initSoldier(entity, krallikId) |
+| 390 | Tüm Askerleri Tick | tickAll() |
+| 391 | Asker İşleme | _processSoldier(entity, state) |
+| 392 | Hedef Bulma | _findTarget(entity, state) |
+| 393 | Saldırı | _attackTarget(entity, state, target) |
+| 394 | Koruma Davranışı | _behaviorGuard(entity, state) |
+| 395 | Mevzi Davranışı | _behaviorHold(entity, state) |
+| 396 | Savunma Davranışı | _behaviorDefend(entity, state) |
+| 397 | Geri Çekilme | _behaviorRetreat(entity, state) |
+| 398 | Toplanma | _behaviorRally(entity, state) |
+| 399 | Devriye | _behaviorPatrol(entity, state) |
+| 400 | Saldırgan | _behaviorAggressive(entity, state) |
+| 401 | AI Arama Menzili | 32 blok |
+| 402 | AI Saldırganlık Menzili | 16 blok |
+| 403 | AI Görüş Menzili | 64 blok |
+| 404 | AI Geri Çekilme HP | %25 |
+| 405 | AI Morale Geri Çekilme | 25 |
+| 406 | AI Hedef Hafızası | 100 tick |
+| 407 | AI Savaş Kontrolü | 20 tick |
+| 408 | AI Tick Yayılımı | 4 tick |
+| 409 | AI Uyku Mesafesi | 64 blok |
+
+### 7.3. ASKER MORALE (MORALE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 410 | Morale Güncelleme | update(kid) |
+| 411 | Morale Çarpanı | getMoraleMultiplier(moral) |
+| 412 | Morale Durumu | getMoraleStatus(moral) |
+| 413 | Morale Bonusları | getMoraleBonuses(kid) |
+| 414 | Tüm Krallıkları Güncelle | updateAll() |
+| 415 | Yüksek Morale | %80+ → Hasar %20, Hız %15 |
+| 416 | Normal Morale | %60-80 → Normal |
+| 417 | Düşük Morale | %40-60 → Hasar %10, Hız %5 |
+| 418 | Çok Düşük Morale | %20-40 → Hasar %25, Hız %15 |
+| 419 | Kritik Morale | %20 altı → Hasar %50, Hız %30 |
+
+### 7.4. ASKER RÜTBE (RANKS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 420 | Acemi | 0 kill, Hasar x1.0, Hız x1.0 |
+| 421 | Kıdemli | 5 kill, Hasar x1.2, Hız x1.05 |
+| 422 | Uzman | 15 kill, Hasar x1.4, Hız x1.1 |
+| 423 | Elit | 40 kill, Hasar x1.6, Hız x1.15 |
+| 424 | Muhafız | 100 kill, Hasar x2.0, Hız x1.25 |
+| 425 | Efsane | 250 kill, Hasar x2.5, Hız x1.4 |
+| 426 | Rütbe Alma | getRank(kill) |
+| 427 | Rütbe Güncelleme | updateSoldierRank(entityId) |
+| 428 | Tüm Rütbeleri Güncelle | updateAllRanks(kid) |
+| 429 | Rütbe Bilgisi | getSoldierRankInfo(entityId) |
+| 430 | Sonraki Rütbe | getNextRank(kill) |
+| 431 | Rütbe Bonusları | getRankBonuses(kill) |
+| 432 | Kill Ekleme | addKill(entityId, amount) |
+| 433 | Rütbe Liderlik | getRankLeaderboard(kid, limit) |
+| 434 | Rütbe Formatlama | formatRank(kill) |
+| 435 | Rütbe Gösterme | showRank(player, entityId) |
+
+### 7.5. ASKER EĞİTİMİ (TRAINING)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 436 | Temel Eğitim | 500 ZMC, 60 saniye |
+| 437 | İleri Eğitim | 1.500 ZMC, 120 saniye |
+| 438 | Elit Eğitim | 5.000 ZMC, 300 saniye |
+| 439 | Özel Eğitim | 10.000 ZMC, 600 saniye |
+| 440 | Eğitim Başlatma | startTraining(player, entityId, trainingId) |
+| 441 | Eğitim Tick | tick() |
+| 442 | Eğitim Durumu | getTrainingStatus(entityId) |
+| 443 | Eğitim İptal | cancelTraining(player, entityId) |
+| 444 | Eğitim Bilgisi | showTrainingInfo(player, entityId) |
+
+### 7.6. ASKER FORMASYONLARI (FORMATIONS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 445 | Savunma Formasyonu | Savunma +%30, Hasar -%20 |
+| 446 | Saldırı Formasyonu | Hasar +%30, Savunma -%20 |
+| 447 | Çizgi Formasyonu | Hasar +%10, Hız +%10 |
+| 448 | Kare Formasyonu | Savunma +%20, Morale +%10 |
+| 449 | Çember Formasyonu | Savunma +%40, Hasar -%10 |
+| 450 | Formasyon Uygulama | applyFormation(player, formationId) |
+| 451 | Formasyon Bozma | breakFormation(player) |
+| 452 | Formasyon Bonusları | getFormationBonuses(formationId) |
+| 453 | Aktif Formasyon | getActiveFormation(kid) |
+| 454 | Formasyon Bilgisi | getFormationInfo(formationId) |
+| 455 | Tüm Formasyonlar | getAllFormations() |
+
+### 7.7. ASKER MAAŞI
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 456 | Haftalık Maaş | Her asker için 50 ZMC |
+| 457 | Maaş Ödeme | Otomatik, hazine'den |
+| 458 | Maaş Yetersiz | Morale düşer |
+
+### 7.8. ASKER KAÇIŞI
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 459 | Morale Düşük | %25 altı asker kaçar |
+| 460 | Kaçış Şansı | Morale'a göre artar |
+| 461 | Kaçan Asker | Entity silinir |
+
+### 7.9. ASKER İSYANI
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 462 | Maaş Ödenmez | Askerler isyan eder |
+| 463 | İsyan Süresi | 3 hafta maaş ödenmezse |
+| 464 | İsyan Sonucu | Askerler krallığa saldırır |
+
+### 7.10. AV SİSTEMİ (HUNTING)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 465 | Geyik | Et: 5, Deri: 2, XP: 50 |
+| 466 | Yaban Domuzu | Et: 8, Deri: 3, XP: 75 |
+| 467 | Kurt | Et: 3, Deri: 4, XP: 60, Tehlikeli |
+| 468 | Ayı | Et: 12, Deri: 6, XP: 120, Tehlikeli |
+| 469 | Tavşan | Et: 2, Deri: 1, XP: 25 |
+| 470 | Av Başlatma | startHunt(player, animalId) |
+| 471 | Av Öldürme | killAnimal(entityId, player) |
+| 472 | Av Durumu | getHuntStatus(entityId) |
+| 473 | Aktif Avlar | getActiveHunts(kid) |
+| 474 | Hayvan Bilgisi | getAnimalInfo(animalId) |
+| 475 | Tüm Hayvanlar | getAllAnimals() |
+| 476 | Av İstatistikleri | getHuntStats(kid) |
+
+### 7.11. ASKER KAHRAMAN SİSTEMİ
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 477 | Kahraman Oluşturma | 100 kill yapan asker kahraman olur |
+| 478 | Kahraman Bonusları | Tüm statlar %50 artar |
+| 479 | Kahraman Görseli | Özel isim tag'i |
+| 480 | Kahraman Listesi | Kahraman askerler listelenir |
+
+---
+
+## 📋 BÖLÜM 8: EKONOMİ SİSTEMİ
+
+### 8.1. GELİR/GİDER (ECONOMY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 481 | Gelir Hesaplama | calculateIncome(kid) |
+| 482 | Gider Hesaplama | calculateExpenses(kid) |
+| 483 | Ekonomi Tick | tick() |
+| 484 | Ekonomi Bilgisi | getEconomyInfo(kid) |
+| 485 | Claim Geliri | Claim türüne göre gelir |
+| 486 | Asker Geliri | Asker başına gelir |
+| 487 | Ticaret Geliri | Ticaret yollarından gelir |
+| 488 | Asker Maaşı | Asker başına gider |
+| 489 | Claim Bakımı | Claim başına gider |
+| 490 | Net Gelir | Gelir - Gider |
+
+### 8.2. MARKET (MARKET)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 491 | Buğday | Fiyat: 30 ZMC, Stok: 2000 |
+| 492 | Demir Külçesi | Fiyat: 200 ZMC, Stok: 800 |
+| 493 | Altın Külçesi | Fiyat: 400 ZMC, Stok: 500 |
+| 494 | Elmas | Fiyat: 1.800 ZMC, Stok: 100 |
+| 495 | Zümrüt | Fiyat: 1.500 ZMC, Stok: 150 |
+| 496 | Ekmek | Fiyat: 50 ZMC, Stok: 1000 |
+| 497 | Pişmiş İnek Eti | Fiyat: 80 ZMC, Stok: 1000 |
+| 498 | Taş | Fiyat: 15 ZMC, Stok: 800 |
+| 499 | Kırıktaş | Fiyat: 8 ZMC, Stok: 1000 |
+| 500 | Demir Kılıç | Fiyat: 600 ZMC, Stok: 100 |
+| 501 | Yay | Fiyat: 400 ZMC, Stok: 100 |
+| 502 | Obsidyen | Fiyat: 500 ZMC, Stok: 200 |
+| 503 | Mancınık | Fiyat: 50.000 ZMC, Stok: 5 |
+| 504 | Cephane | Fiyat: 500 ZMC, Stok: 100 |
+| 505 | Barut | Fiyat: 800 ZMC, Stok: 80 |
+| 506 | Siper Kiti | Fiyat: 3.000 ZMC, Stok: 20 |
+| 507 | Top Mermisi | Fiyat: 1.500 ZMC, Stok: 50 |
+| 508 | Savunma Ekipmanı | Fiyat: 5.000 ZMC, Stok: 30 |
+| 509 | Nadir Savaş | Fiyat: 25.000 ZMC, Stok: 5 |
+| 510 | Fiyat Getirme | getPrice(itemId, kid) |
+| 511 | Ürün Satın Alma | buyItem(player, itemId, quantity) |
+| 512 | Ürün Satma | sellItem(player, itemId, quantity) |
+| 513 | Stok Yenileme | refreshStock() |
+| 514 | Savaş Çarpanı | Savaşta fiyatlar %50 artar |
+
+### 8.3. TİCARET YOLLARI (TRADE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 515 | Ticaret Yolu Oluşturma | createRoute(kid, claimAId, claimBId) |
+| 516 | Ticaret Yolu Güncelleme | updateRoute(kid, routeId) |
+| 517 | Ticaret Yolu Tick | tick() |
+| 518 | Ticaret Yolu Yükseltme | upgradeRoute(kid, routeId) |
+| 519 | Ticaret Yolu Silme | deleteRoute(kid, routeId) |
+| 520 | Ticaret Yolu Bilgisi | getRouteInfo(kid, routeId) |
+| 521 | Tüm Ticaret Yolları | getAllRoutes(kid) |
+| 522 | Ticaret İstatistikleri | getTradeStats(kid) |
+| 523 | Ticaret Geliri | Claim'ler arası ticaret geliri |
+| 524 | Ticaret Soygunu | Düşman ticaret yolunu soyabilir |
+
+### 8.4. VERGİ SİSTEMİ (TAXES)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 525 | Haftalık Vergi | 2.500 ZMC |
+| 526 | Vergi Periyodu | 7 MCPE günü (8.400.000 ms) |
+| 527 | Maksimum Borç | 10.000 ZMC |
+| 528 | Faiz Oranı | %10 |
+| 529 | Krallık Vergisi | getKingdomTax(kid) |
+| 530 | Oyuncu Vergisi | getPlayerTax(playerName) |
+| 531 | Vergi Ödeme | payTax(player) |
+| 532 | Haftalık Vergi Kontrolü | checkWeeklyTax() |
+| 533 | Borç Getirme | getDebt(playerName) |
+| 534 | Borç Ödeme | payDebt(player, amount) |
+| 535 | Borç Birikmesi | Ödenmezse borç birikir |
+| 536 | İtibar Düşüşü | Ödenmezse -10 itibar/hafta |
+| 537 | Haciz | 3 hafta ödenmezse claim satılır |
+| 538 | Krallıktan Atılma | 5 hafta ödenmezse atılır |
+
+### 8.5. HAZİNE YÖNETİMİ (TREASURY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 539 | Hazine Durumu | getStatus(kid) |
+| 540 | Hazine Ekleme | add(kid, amount, reason) |
+| 541 | Hazine Çıkarma | remove(kid, amount, reason) |
+| 542 | Hazine Transfer | transfer(fromKid, toKid, amount) |
+| 543 | Borç Ödeme | payDebt(kid, amount) |
+| 544 | Faiz İşleme | processInterest(kid) |
+| 545 | Hazine Raporu | getReport(kid, days) |
+| 546 | Hazine Senkronizasyonu | Liderin ZMC'sine bağlı |
+
+### 8.6. KAYNAK SİSTEMİ (RESOURCES)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 547 | Odun | Üretim: 5/saat, Değer: 10 ZMC |
+| 548 | Taş | Üretim: 3/saat, Değer: 15 ZMC |
+| 549 | Demir | Üretim: 2/saat, Değer: 30 ZMC |
+| 550 | Altın | Üretim: 1/saat, Değer: 60 ZMC |
+| 551 | Elmas | Üretim: 0.2/saat, Değer: 150 ZMC |
+| 552 | Et | Üretim: 4/saat, Değer: 8 ZMC |
+| 553 | Deri | Üretim: 2/saat, Değer: 12 ZMC |
+| 554 | Kaynak Üretimi | produceResources(kid) |
+| 555 | Kaynak Geliri | getIncome(kid) |
+| 556 | Kaynak Kullanma | useResource(kid, resourceId, amount) |
+| 557 | Kaynak Kontrolü | hasResources(kid, resources) |
+| 558 | Kaynak Durumu | getResourceStatus(kid) |
+| 559 | Kaynak Satma | sellResource(kid, resourceId, amount) |
+| 560 | Kaynak Satın Alma | buyResource(kid, resourceId, amount) |
+| 561 | Kaynak Formatlama | formatResource(resourceId, amount) |
+
+### 8.7. ENFLASYON SİSTEMİ (INFLATION)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 562 | Baz Oran | 0.001 |
+| 563 | Maksimum Oran | 0.05 |
+| 564 | Minimum Oran | -0.005 |
+| 565 | Enflasyon Güncelleme | update() |
+| 566 | Enflasyon Faktörü | getFactor() |
+| 567 | Enflasyon Durumu | getStatus() |
+| 568 | Fiyat Düzenleme | adjustPrice(basePrice) |
+| 569 | Değer Etkisi | getEffectOnValue(value) |
+| 570 | Enflasyon Raporu | getReport() |
+| 571 | Enflasyon Sıfırlama | reset() |
+| 572 | Savaş Etkisi | Savaşta enflasyon artar |
+
+### 8.8. İFLAS SİSTEMİ (BANKRUPTCY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 573 | Uyarı Eşiği | -5.000 ZMC |
+| 574 | Kritik Eşik | -15.000 ZMC |
+| 575 | İflas Eşiği | -30.000 ZMC |
+| 576 | İflas Kontrolü | check(kid) |
+| 577 | İflas Durumu | getStatus(kid) |
+| 578 | Uyarı Bildirimi | Uyarı eşiğinde bildirim |
+| 579 | Kritik Bildirim | Kritik eşiğinde bildirim |
+| 580 | İflas İşlemi | İflas eşiğinde krallık dağılır |
+
+### 8.9. YATIRIM SİSTEMİ
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 581 | Güvenli Yatırım | 10.000 ZMC, %2 getiri |
+| 582 | Orta Yatırım | 50.000 ZMC, %5 getiri |
+| 583 | Yüksek Yatırım | 100.000 ZMC, %10 getiri |
+| 584 | Riskli Yatırım | 250.000 ZMC, %20 getiri |
+| 585 | Yatırım Yapma | Yatırım yapılır |
+| 586 | Getiri Alma | Haftalık getiri alınır |
+| 587 | Yatırım İptal | Yatırım iptal edilebilir |
+
+### 8.10 | KREDİ SİSTEMİ
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 588 | Kredi Alma | Krallık kredi alabilir |
+| 589 | Kredi Limiti | Hazine değerine göre |
+| 590 | Faiz Oranı | %10 |
+| 591 | Kredi Ödeme | Kredi ödenebilir |
+| 592 | Kredi Temerrüt | Ödenmezse faiz işler |
+
+---
+
+## 📋 BÖLÜM 9: DİPLOMASİ SİSTEMİ
+
+### 9.1. DİPLOMASİ YÖNETİMİ (DIPLOMACY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 593 | İlişki Durumu | getRelation(kidA, kidB) |
+| 594 | İlişki Değiştirme | modifyRelation(kidA, kidB, delta, reason) |
+| 595 | İttifak Kontrolü | isAllied(kidA, kidB) |
+| 596 | Savaş Kontrolü | isAtWar(kidA, kidB) |
+| 597 | Erişim Kontrolü | hasAccess(kidA, kidB) |
+| 598 | Antlaşma Kontrolü | hasTreaty(kidA, kidB) |
+| 599 | Krallık İlişkileri | getKingdomRelations(kid) |
+| 600 | Diplomasi Bilgisi | getDiplomacyInfo(kid) |
+| 601 | İlişki Bozulma | Günlük 0.1 |
+| 602 | Maksimum Antlaşma | 10 |
+
+### 9.2. İTTİFAK (ALLIANCES)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 603 | İttifak Kurma | formAlliance(kidA, kidB) |
+| 604 | İttifak Bozma | breakAlliance(kidA, kidB) |
+| 605 | İttifak Listesi | getAlliances(kid) |
+| 606 | İttifak Kontrolü | isAllied(kidA, kidB) |
+| 607 | İttifak Ücreti | 10.000 ZMC |
+| 608 | İttifak İtibar | 5 itibar gerekli |
+| 609 | İttifak Avantajları | Savaşta yardım, ticaret bonusu |
+| 610 | İttifak Dezavantajları | Savaşa otomatik katılım |
+
+### 9.3. SAVAŞ (WAR)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 611 | Savaş İlanı | declareWar(kidA, kidB, reason) |
+| 612 | Barış Yapma | makePeace(kidA, kidB, winner) |
+| 613 | Savaş Skoru | getWarScore(kidA, kidB) |
+| 614 | Savaş Tazminatı | getWarReparations(kidA, kidB) |
+| 615 | Minimum Asker | 5 asker |
+| 616 | Minimum Hazine | 50.000 ZMC |
+| 617 | Maksimum Süre | 2 saat (7200 saniye) |
+| 618 | Ganimet Oranı | %30 |
+| 619 | Tazminat Oranı | %30 |
+| 620 | Savunma Bonusu | %25 |
+| 621 | Kuşatma Süresi | 120 saniye |
+| 622 | Kuşatma Menzili | 50 blok |
+| 623 | Savaş Sonrası Bekleme | 7 gün |
+| 624 | Savaş Nedenleri | Toprak, intikam, ittifak, ekonomi |
+| 625 | Savaş Bildirimi | Tüm krallıklara bildirim |
+| 626 | Müttefik Katılımı | İttifaklar otomatik katılır |
+| 627 | Tarafsız Krallıklar | Etkilenmez |
+| 628 | Savaş Esirleri | Askerler esir alınabilir |
+| 629 | Savaş Fidyesi | Esirler ZMC ile kurtarılır |
+| 630 | Savaş Suçları | İtibar kaybı |
+| 631 | Savaş Tarihi | Krallık tarihine kaydedilir |
+
+### 9.4 | GANİMET (SPOILS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 632 | Ganimet Dağıtma | distribute(winnerKid, loserKid, winner) |
+| 633 | Ganimet Raporu | getSpoilsReport(kid, limit) |
+| 634 | Ganimet İstatistikleri | getSpoilsStats(kid) |
+| 635 | Hazine Ganimeti | Kaybedenin hazinesinin %30'u |
+| 636 | Claim Ganimeti | En az 1 claim |
+| 637 | İtibar Ganimeti | +20 itibar |
+
+### 9.5 | ELÇİ / MESAJ (MESSENGER)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 638 | Mesaj Gönderme | sendMessage(fromKid, toKid, message, type) |
+| 639 | Mesajları Listeleme | getMessages(kid, limit) |
+| 640 | Mesaj Okuma | readMessage(kid, messageId) |
+| 641 | Mesaj Yanıtlama | replyMessage(kid, messageId, replyText) |
+| 642 | Okunmamış Sayısı | getUnreadCount(kid) |
+| 643 | Mesaj Formatlama | formatMessage(msg) |
+| 644 | Mesaj Tipleri | diplomatic, trade, alliance, war, peace, reply, threat |
+| 645 | Elçi Dokunulmazlığı | Elçilere saldırı savaş sebebi |
+
+### 9.6 | VASAL / HİMAYE (VASAL)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 646 | Vasal Teklif Etme | offerVassal(vasalKid, lordKid) |
+| 647 | Vasal Kabul Etme | acceptVassal(lordKid, offerId) |
+| 648 | Vasal Reddetme | rejectVassal(lordKid, offerId) |
+| 649 | Efendi Getirme | getLord(vasalKid) |
+| 650 | Vasalları Getirme | getVassals(lordKid) |
+| 651 | Vasal Bilgisi | getVassalInfo(vasalKid) |
+| 652 | İsyan Etme | revolt(vasalKid) |
+| 653 | Vasal Azat Etme | freeVassal(lordKid, vasalKid) |
+| 654 | Haraç Toplama | collectTax(lordKid) |
+| 655 | Haraç Oranı | Gelirin %20'si |
+| 656 | Vasal İsyanı | İlişkiler -50 |
+
+### 9.7 | CASUSLUK (SPY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 657 | Casus Gönderme | sendSpy(fromKid, targetKid, mission) |
+| 658 | Casus Sonucu | getSpyResult(spyId) |
+| 659 | Casus Tick | tick() |
+| 660 | Casus Listesi | getSpies(kid, status) |
+| 661 | Casus Görevleri | info, treasury, army, claims, alliances |
+| 662 | Casus Süresi | 24 saat |
+| 663 | Casus Yakalanma | İlişkiler -20 |
+| 664 | Casus Başarısı | Bilgi alınır |
+
+### 9.8 | ANTLAŞMA (TREATY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 665 | Saldırmazlık | Taraflar birbirine saldıramaz |
+| 666 | Ticaret | Ticaret vergileri %50 azalır |
+| 667 | Savunma | Taraflar birbirini savunur |
+| 668 | Barış | Savaş sonrası barış garantisi |
+| 669 | İttifak | Tam ittifak, tüm alanlarda işbirliği |
+| 670 | Antlaşma Oluşturma | createTreaty(kidA, kidB, type, duration) |
+| 671 | Antlaşma İptal | cancelTreaty(kid, treatyId) |
+| 672 | Antlaşma Kontrolü | hasTreaty(kidA, kidB, type) |
+| 673 | Antlaşmaları Listeleme | getTreaties(kid) |
+| 674 | Antlaşma Tick | tick() |
+| 675 | Antlaşma Bonusları | getTreatyBonuses(kidA, kidB) |
+
+### 9.9 | YAPTIRIMLAR (SANCTIONS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 676 | Ticaret Ambargosu | Hedef krallıkla ticaret yasak |
+| 677 | Seyahat Yasağı | Hedef krallık üyeleri giremez |
+| 678 | Varlık Dondurma | Hedef krallığın hazinesi dondurulur |
+| 679 | Askeri Yaptırım | Asker üretimi ve hareketi kısıtlanır |
+| 680 | Diplomatik İzolasyon | Tüm diplomatik ilişkiler kesilir |
+| 681 | Yaptırım Uygulama | imposeSanction(applierKid, targetKid, type, duration) |
+| 682 | Yaptırım Kaldırma | removeSanction(applierKid, sanctionId) |
+| 683 | Yaptırım Kontrolü | hasSanction(applierKid, targetKid, type) |
+| 684 | Yaptırım Listesi | getSanctions(kid) |
+| 685 | Yaptırım Etkileri | getSanctionEffects(kid) |
+| 686 | Yaptırım Tick | tick() |
+
+---
+
+## 📋 BÖLÜM 10: OLAY SİSTEMİ
+
+### 10.1 | GÜNLÜK GÖREVLER (DAILY)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 687 | 5 Düşman Öldür | Ödül: 500 ZMC |
+| 688 | 10 Düşman Öldür | Ödül: 1.000 ZMC |
+| 689 | 1 Claim Al | Ödül: 1.500 ZMC |
+| 690 | 1000 ZMC Ticaret | Ödül: 750 ZMC |
+| 691 | 3 Asker Al | Ödül: 1.200 ZMC |
+| 692 | Savaş Kazan | Ödül: 2.500 ZMC |
+| 693 | 1 Saat Online Kal | Ödül: 500 ZMC |
+| 694 | Görev Oluşturma | generateDailyTask(player) |
+| 695 | Görev İlerleme | progressTask(player, type, amount, value) |
+| 696 | Görev Durumu | getDailyTask(player) |
+
+### 10.2 | GLOBAL OLAYLAR (GLOBAL)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 697 | Ekonomik Kriz | Gelir %50 azalır, Şans: %2, Süre: 6000 tick |
+| 698 | Kıtlık | Market fiyatları %50 artar, Şans: %3, Süre: 8000 tick |
+| 699 | Askeri Bonus | Hasar %30 artar, Şans: %4, Süre: 4000 tick |
+| 700 | İndirim | Market indirimi %30, Şans: %5, Süre: 5000 tick |
+| 701 | Savaş Alarmı | Saldırganlık %50 artar, Şans: %1, Süre: 3000 tick |
+| 702 | Olay Başlatma | startEvent(eventId) |
+| 703 | Olay Sonlandırma | endEvent(eventId) |
+| 704 | Olay Tick | tick() |
+| 705 | Olay Etkileri | getEffects() |
+| 706 | Aktif Olaylar | getActiveEvents() |
+| 707 | Oyuncu Bildirimi | notifyPlayers() |
+| 708 | Olay Geçmişi | getHistory(limit) |
+
+### 10.3 | BAŞARILAR (ACHIEVEMENTS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 709 | İlk Krallık | İlk krallığını kur |
+| 710 | Gelişen Krallık | Krallık seviyesi 5 |
+| 711 | İmparatorluk | Krallık seviyesi 10 |
+| 712 | Küçük Ordu | 10 askere sahip ol |
+| 713 | Büyük Ordu | 50 askere sahip ol |
+| 714 | Efsanevi Ordu | 100 askere sahip ol |
+| 715 | Toprak Sahibi | 5 claim'e sahip ol |
+| 716 | Büyük Toprak | 20 claim'e sahip ol |
+| 717 | İlk Zafer | İlk savaşını kazan |
+| 718 | Savaş Lordu | 10 savaş kazan |
+| 719 | Zengin Krallık | 100.000 ZMC hazine |
+| 720 | Milyoner Krallık | 1.000.000 ZMC hazine |
+| 721 | Diplomat | 3 ittifak kur |
+| 722 | İmparator | 3 vasal krallığa sahip ol |
+| 723 | Başarı Kontrolü | checkAchievements(kid) |
+| 724 | Başarı Listesi | getAchievements(kid) |
+| 725 | Kazanılan Başarılar | getUnlockedAchievements(kid) |
+| 726 | Toplam Puan | getTotalPoints(kid) |
+| 727 | Tüm Krallıkları Kontrol | checkAll() |
+| 728 | Başarı Kategorileri | getCategories() |
+| 729 | Başarı Formatlama | formatAchievement(achievement) |
+
+### 10.4 | KRALLIK LİGİ (LEAGUE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 730 | Demir Lig | Min güç: 0 |
+| 731 | Bronz Lig | Min güç: 1.000 |
+| 732 | Gümüş Lig | Min güç: 2.500 |
+| 733 | Altın Lig | Min güç: 5.000 |
+| 734 | Elmas Lig | Min güç: 10.000 |
+| 735 | Efsane Lig | Min güç: 20.000 |
+| 736 | Lig Alma | getLeague(kid) |
+| 737 | Lig Güncelleme | updateLeague(kid) |
+| 738 | Lig Sıralaması | getLeagueRanking(leagueId) |
+| 739 | Haftalık Ödüller | weeklyRewards() |
+| 740 | Lig İlerleme | getLeagueProgress(kid) |
+| 741 | Lig Bilgisi | showLeagueInfo(player) |
+| 742 | Liderlik Tablosu | getLeaderboard(limit) |
+
+### 10.5 | FESTİVALLER (FESTIVALS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 743 | Hasat Festivali | Tarım geliri x2 |
+| 744 | Savaşçı Festivali | Asker eğitimi x2 |
+| 745 | Ticaret Festivali | Market indirimi |
+| 746 | Krallık Festivali | Tüm gelirler ve morale artar |
+| 747 | Barış Festivali | Diplomasi bonusları artar |
+| 748 | Festival Başlatma | startFestival(kid, festivalId) |
+| 749 | Festival Durumu | getFestivalStatus(kid) |
+| 750 | Festival Bonusları | getFestivalBonuses(kid) |
+| 751 | Festival Tick | tick() |
+| 752 | Festival İptal | cancelFestival(kid) |
+| 753 | Festival Bilgisi | showFestivalInfo(player) |
+
+---
+
+## 📋 BÖLÜM 11: ARTEFAKT SİSTEMİ
+
+### 11.1 | ARTEFAKT BULMA (ARTIFACTS)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 754 | Eski Kılıç | Hasar +%5 |
+| 755 | Koruyucu Kalkan | Savunma +%5 |
+| 756 | Efsane Kılıç | Hasar +%15 |
+| 757 | Kral Tacı | Gelir +%10 |
+| 758 | Kutsal Kalkan | Savunma +%30 |
+| 759 | Büyülü Asa | Tüm bonuslar +%20 |
+| 760 | Tanrı Kılıcı | Hasar +%50 |
+| 761 | Ölümsüzlük Tacı | Tüm bonuslar +%30, ölümsüzlük |
+| 762 | Artefakt Bulma | findArtifact(kid, source) |
+| 763 | Artefakt Bonusları | getArtifactBonuses(kid) |
+| 764 | Artefakt Listesi | getArtifacts(kid) |
+| 765 | Artefakt Sayısı | getArtifactCount(kid) |
+| 766 | Artefakt Satma | sellArtifact(kid, artifactId) |
+| 767 | Artefakt Bilgisi | showArtifacts(player) |
+| 768 | Bulma Kaynakları | Savaş, keşif, satın alma |
+
+### 11.2 | BÜYÜ / KEŞİF (MAGIC)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 769 | Kehanet | Düşman saldırısını önceden gör |
+| 770 | Koruma Büyüsü | Claim savunması +%20 |
+| 771 | Hız İksiri | Asker hızı +%30 |
+| 772 | Bereket Büyüsü | Krallık geliri +%25 |
+| 773 | Lanet | Düşman morale -%15 |
+| 774 | Kuşatma Büyüsü | Kuşatma süresi -%30 |
+| 775 | Büyü Yapma | castSpell(kid, spellId, targetKid) |
+| 776 | Aktif Büyüler | getActiveSpells(kid) |
+| 777 | Büyü Etkileri | getSpellEffects(kid) |
+| 778 | Keşif Yapma | explore(kid) |
+| 779 | Büyü Bilgisi | getSpellInfo(spellId) |
+| 780 | Tüm Büyüler | getAllSpells() |
+| 781 | Büyü Bilgisi Gösterme | showSpells(player) |
+| 782 | Büyü Tick | tick() |
+| 783 | Büyü Süresi | 1 saat |
+| 784 | Büyü Maliyeti | 3.000 - 15.000 ZMC |
+
+---
+
+## 📋 BÖLÜM 12: YERLEŞİM SİSTEMİ
+
+### 12.1 | KÖY / YERLEŞİM (VILLAGE)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 785 | Küçük Köy | Max nüfus: 20, Gelir: 50 ZMC |
+| 786 | Orta Köy | Max nüfus: 50, Gelir: 150 ZMC |
+| 787 | Büyük Köy | Max nüfus: 100, Gelir: 350 ZMC |
+| 788 | Kasaba | Max nüfus: 200, Gelir: 750 ZMC |
+| 789 | Köy Kurma | createVillage(kid, claimId, typeId) |
+| 790 | Nüfus Artışı | growPopulation(kid, claimId) |
+| 791 | Köy Geliri | getVillageIncome(kid, claimId) |
+| 792 | Köy Yükseltme | upgradeVillage(kid, claimId) |
+| 793 | Köy Bilgisi | getVillageInfo(kid, claimId) |
+| 794 | Tüm Köyler | getVillages(kid) |
+| 795 | Köy Statüsü | getVillageStatus(kid) |
+| 796 | Köy Tick | tick() |
+| 797 | Köy Mutluluğu | Mutluluk düşükse isyan |
+| 798 | Köy İsyanı | Mutluluk %20 altı |
+| 799 | Köy Nüfus Artışı | Zamanla artar |
+| 800 | Köy Gelişimi | Bina inşa edilerek |
+
+---
+
+## 📋 BÖLÜM 13: CASUS / HAYDUT SİSTEMİ (V3)
+
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 801 | Casus Entity | Sonradan eklenecek |
+| 802 | Haydut Saldırıları | Güçsüz krallıklara saldırır |
+| 803 | Tarla Yağmalama | Tarım claim'lerindeki ekinleri çalar |
+| 804 | Köylü Öldürme | Köydeki köylüleri öldürür |
+| 805 | Sandık Açma | Claim içindeki sandıkları açar |
+| 806 | Tünel Kazma | Yeraltından tünel açar |
+| 807 | Hazine Bulma | Yeraltındaki sandıkları bulur |
+| 808 | Toplu Saldırı | Büyük krallıklara toplu saldırı |
+| 809 | Gizlice Saldırı | Gündüzleri gizlenir, akşamları saldırır |
+| 810 | Bildirim | Claim içine girince tüm üyelere bildirim |
+| 811 | Öldürülünce | Envanterindekiler yere düşer |
+| 812 | Biyom Spawn | Her biyomda doğabilir |
+
+---
+
+## 📋 BÖLÜM 14: UI SİSTEMİ
+
+### 14.1 | ANA MENÜ (MENU)
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 813 | Ana Menü | anaMenu(player) |
+| 814 | Grid Düzeni | Butonlar ızgara şeklinde |
+| 815 | Tek Ekran | Tüm butonlar tek ekranda |
+| 816 | Krallık Kurma Formu | kurmaFormu(player) |
+| 817 | Ordu Menüsü | askerMenusu(player) |
+| 818 | Claim Menüsü | claimMenusu(player) |
+| 819 | Ekonomi Menüsü | ekonomiMenusu(player) |
+| 820 | Savaş Menüsü | savasMenusu(player) |
+| 821 | Diplomasi Menüsü | diplomasiMenusu(player) |
+| 822 | Dükkan Menüsü | dukkanMenusu(player) |
+| 823 | Bina Menüsü | binaMenusu(player) |
+| 824 | VIP Menüsü | vipMenusu(player) |
+| 825 | Yerleşim Menüsü | yerlesimMenusu(player) |
+| 826 | Olaylar Menüsü | olayMenusu(player) |
+| 827 | Liderlik Menüsü | liderlikMenusu(player) |
+| 828 | Rapor Menüsü | raporMenusu(player) |
+| 829 | Ayarlar Menüsü | ayarMenusu(player) |
+
+### 14.2 | DASHBOARD
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 830 | Krallık Durum Paneli | getKingdomStatus(krallik) |
+| 831 | Krallık Özet | getSummary(krallik) |
+| 832 | Krallık Yok Mesajı | noKingdom() |
+| 833 | Detaylı Rapor | getDetailedReport(kid) |
+| 834 | Krallık Adı | İsim, lider, üye, seviye |
+| 835 | Hazine | Hazine, gelir, gider |
+| 836 | Asker | Asker sayısı, morale |
+| 837 | Claim | Claim sayısı, alan |
+| 838 | Durum | Barış, savaş, kuşatma, alarm |
+
+### 14.3 | ADMIN PANELİ
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 839 | Admin Kontrolü | isAdmin(player) |
+| 840 | Admin Paneli Gösterme | showAdminPanel(player) |
+| 841 | Şifre Sorma | _showPasswordPrompt(player) |
+| 842 | Admin Ana Menüsü | _showAdminMainMenu(player) |
+| 843 | Veritabanı Menüsü | _showDatabaseMenu(player) |
+| 844 | Krallık Menüsü | _showKingdomMenu(player) |
+| 845 | Oyuncu Menüsü | _showPlayerMenu(player) |
+| 846 | Ekonomi Menüsü | _showEconomyMenu(player) |
+| 847 | Claim Menüsü | _showClaimMenu(player) |
+| 848 | Asker Menüsü | _showArmyMenu(player) |
+| 849 | Market Menüsü | _showMarketMenu(player) |
+| 850 | Şifre Değiştirme | _showChangePassword(player) |
+
+### 14.4 | CUSTOMIZE PANELİ
+| # | Sistem | Açıklama |
+|---|--------|----------|
+| 851 | Menü Düzenleme | Buton ekle/sil/taşı |
+| 852 | Renk Düzenleme | Renk paletini değiştir |
+| 853 | Fiyat Düzenleme | Krallık, claim, asker fiyatları |
+| 854 | Ayarlar Düzenleme | Vergi oranı, limitler |
+| 855 | Varsayılana Dön | Tüm ayarlar sıfırlanır |
+
+---
+
+## 📋 BÖLÜM 15: TEKNİK DETAYLAR
+
+### 15.1 | RENK PALETİ
+| # | Renk | Kod | Kullanım |
+|---|------|-----|----------|
+| 856 | Primary | §6 | Altın - Başlıklar |
+| 857 | Secondary | §e | Sarı - Vurgular |
+| 858 | Accent | §d | Mor - Özel |
+| 859 | Danger | §c | Kırmızı - Savaş |
+| 860 | Success | §a | Yeşil - Başarı |
+| 861 | Info | §b | Mavi - Bilgi |
+| 862 | Muted | §7 | Gri - Yan metin |
+| 863 | Dark | §8 | Koyu gri - Ayraçlar |
+| 864 | White | §f | Beyaz - Ana metin |
+| 865 | Black | §0 | Siyah |
+| 866 | Admin | §4 | Koyu kırmızı - Admin |
+| 867 | Kral | §6 | Altın |
+| 868 | Yardımcı | §e | Sarı |
+| 869 | Komutan | §c | Kırmızı |
+| 870 | Diplomat | §b | Mavi |
+| 871 | Ekonomist | §a | Yeşil |
+| 872 | Claimci | §3 | Açık mavi |
+| 873 | Üye | §7 | Gri |
+| 874 | Barış | §a | Yeşil |
+| 875 | Savaş | §c | Kırmızı |
+| 876 | Kuşatma | §6 | Altın |
+| 877 | Alarm | §e | Sarı |
+
+### 15.2 | NAPOLEONIC ENTITY ID'LERİ
+| # | Ülke | Piyade | Süvari | Topçu | Bayrak |
+|---|------|--------|--------|-------|--------|
+| 878 | İngiliz | knights:british_soldier | knights:british_cuirassier | knights:british_gunner | knights:napoleonic_flag_of_england |
+| 879 | Fransız | knights:french_soldier | knights:french_cuirassier | knights:french_gunner | knights:napoleonic_flag_of_france |
+| 880 | Alman | knights:german_soldier | knights:german_cuirassier | knights:german_gunner | knights:napoleonic_flag_of_germany |
+| 881 | Rus | knights:russian_soldier | knights:russian_cuirassier | knights:russian_gunner | knights:napoleonic_flag_of_russia |
+| 882 | İtalyan | knights:italian_soldier | knights:italian_cuirassier | knights:italian_gunner | knights:napoleonic_flag_of_italy |
+| 883 | İspanyol | knights:spanish_soldier | knights:spanish_cuirassier | knights:spanish_gunner | knights:napoleonic_flag_of_spain |
+| 884 | Recruit Event | knights:recruited_event | - | - | - |
+| 885 | Hedef Tag | knights_emir_hedefi | - | - | - |
+
+---
+
+## 📋 BÖLÜM 16: ÖZET İSTATİSTİKLER
+
+| Kategori | Madde Sayısı |
+|----------|--------------|
+| Proje Genel Bilgileri | 9 |
+| Core Sistemleri | 146 |
+| Krallık Sistemi | 131 |
+| Claim Sistemi | 98 |
+| Ordu Sistemi | 129 |
+| Ekonomi Sistemi | 100 |
+| Diplomasi Sistemi | 93 |
+| Olay Sistemi | 51 |
+| Artefakt Sistemi | 30 |
+| Yerleşim Sistemi | 16 |
+| Casus/Haydut Sistemi | 12 |
+| UI Sistemi | 48 |
+| Teknik Detaylar | 30 |
+| **TOPLAM** | **893 madde** |
+
+---
+
+**Tüm sistemler, tüm detaylar, tüm özellikler eksiksiz olarak listelenmiştir.**
